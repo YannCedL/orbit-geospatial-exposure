@@ -1,0 +1,173 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ORBIT — Geospatial Exposure & Hazard Analysis</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <style>
+        :root {
+            --bg-color: #0b0f19;
+            --card-bg: rgba(18, 26, 43, 0.85);
+            --border-color: rgba(255, 255, 255, 0.1);
+            --accent-color: #ef4444;
+            --text-color: #f3f4f6;
+            --text-muted: #9ca3af;
+        }
+
+        * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Inter', sans-serif; }
+
+        body {
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            padding: 1.5rem;
+            background-image: radial-gradient(circle at 90% 90%, rgba(239, 68, 68, 0.1) 0%, transparent 40%);
+        }
+
+        header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 1.5rem;
+            padding-bottom: 1rem;
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        .logo { display: flex; align-items: center; gap: 0.75rem; }
+
+        .logo-icon {
+            width: 38px;
+            height: 38px;
+            background: linear-gradient(135deg, #ef4444, #b91c1c);
+            border-radius: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 700;
+            font-size: 1.2rem;
+            box-shadow: 0 4px 12px rgba(239, 68, 68, 0.3);
+        }
+
+        .logo-title { font-size: 1.3rem; font-weight: 700; }
+        .logo-subtitle { font-size: 0.75rem; color: var(--text-muted); text-transform: uppercase; }
+
+        .layout {
+            display: grid;
+            grid-template-columns: 2fr 1fr;
+            gap: 1.5rem;
+            flex: 1;
+        }
+
+        .map-wrapper {
+            background: var(--card-bg);
+            border: 1px solid var(--border-color);
+            border-radius: 16px;
+            overflow: hidden;
+            min-height: 500px;
+        }
+
+        #map { width: 100%; height: 100%; min-height: 500px; }
+
+        .card {
+            background: var(--card-bg);
+            border: 1px solid var(--border-color);
+            border-radius: 16px;
+            padding: 1.5rem;
+            backdrop-filter: blur(12px);
+        }
+
+        .card-title {
+            font-size: 1rem;
+            font-weight: 600;
+            margin-bottom: 1.25rem;
+            color: var(--text-muted);
+            text-transform: uppercase;
+        }
+
+        .info-row {
+            display: flex;
+            justify-content: space-between;
+            padding: 0.75rem 0;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+        }
+
+        .info-label { color: var(--text-muted); }
+        .info-val { font-weight: 600; text-align: right; }
+
+        .badge {
+            padding: 0.25rem 0.6rem;
+            border-radius: 6px;
+            font-size: 0.75rem;
+            font-weight: 600;
+            background: rgba(239, 68, 68, 0.15);
+            color: #fca5a5;
+        }
+    </style>
+</head>
+<body>
+    <header>
+        <div class="logo">
+            <div class="logo-icon">🌐</div>
+            <div>
+                <div class="logo-title">ORBIT</div>
+                <div class="logo-subtitle">Exposition aux Risques Géospatiaux & Aléas</div>
+            </div>
+        </div>
+        <div class="badge">SPATIAL HAZARD PIPELINE ACTIVE</div>
+    </header>
+
+    <div class="layout">
+        <div class="map-wrapper">
+            <div id="map"></div>
+        </div>
+
+        <div class="card">
+            <div class="card-title">Matrice de Risque du Site</div>
+            <div class="info-row"><span class="info-label">Score Global d'Exposition</span><span class="info-val" id="oRisk" style="color:#fca5a5;">-</span></div>
+            <div class="info-row"><span class="info-label">Risque d'Inondation</span><span class="info-val" id="oFlood">-</span></div>
+            <div class="info-row"><span class="info-label">Risque Sismique</span><span class="info-val" id="oQuake">-</span></div>
+            <div class="info-row"><span class="info-label">Proximité Industrielle</span><span class="info-val" id="oIndus">-</span></div>
+            <div class="info-row"><span class="info-label">Classification</span><span class="info-val" id="oClass" style="color:#34d399;">-</span></div>
+        </div>
+    </div>
+
+    <script>
+        let map = L.map('map').setView([48.8566, 2.3522], 13);
+
+        L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+            maxZoom: 19,
+            attribution: 'Orbit Spatial Hazard Engine'
+        }).addTo(map);
+
+        async function analyserRisqueSpatiale() {
+            try {
+                const response = await fetch('/api/v1/risk?lat=48.8566&lon=2.3522');
+                const contract = await response.json();
+                const r = contract.result;
+
+                document.getElementById('oRisk').textContent = `${(r.overall_risk_score * 100).toFixed(0)} / 100`;
+                document.getElementById('oFlood').textContent = `${(r.flood_risk * 100).toFixed(0)}%`;
+                document.getElementById('oQuake').textContent = `${(r.earthquake_risk * 100).toFixed(0)}%`;
+                document.getElementById('oIndus').textContent = `${(r.industrial_risk * 100).toFixed(0)}%`;
+                document.getElementById('oClass').textContent = (r.risk_classification || 'SÉCURISÉ').toUpperCase();
+
+                const marker = L.circleMarker([r.center[0], r.center[1]], {
+                    radius: 10, fillColor: '#ef4444', color: '#b91c1c', weight: 2, fillOpacity: 0.8
+                }).addTo(map);
+
+                marker.bindPopup(`<strong>Zone d'Analyse Orbit</strong><br/>Risque Global: ${(r.overall_risk_score * 100).toFixed(0)}%`);
+
+            } catch (err) {
+                console.error("Erreur lors du calcul Orbit.");
+            }
+        }
+
+        window.onload = analyserRisqueSpatiale;
+    </script>
+</body>
+</html>
